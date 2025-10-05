@@ -40,17 +40,23 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
   // İsteğe bağlı: seçilen süreçlerden adım oluşturma (varsa body.steps)
-  if (Array.isArray(body.steps) && body.steps.length > 0) {
-    const stepsPayload = body.steps.map((s: any) => ({
-      tenant_id: tenantId,
-      job_id: created.id,
-      template_id: s.template_id,
-      est_duration_hours: s.est_duration_hours ?? null,
-      required_qty: s.required_qty ?? null,
-      status: 'pending'
-    }))
-    await sb.from('step_instances').insert(stepsPayload)
-  }
+// ...job_requests insert yapıldıktan sonra:
+if (Array.isArray(body.steps) && body.steps.length > 0) {
+  const stepsPayload = body.steps.map((s: any) => ({
+    tenant_id: tenantId,
+    job_id: created.id,
+    template_id: s.template_id,
+    est_duration_hours: s.est_duration_hours ?? null,
+    required_qty: s.required_qty ?? null,
+    produced_qty: 0,
+    status: 'pending',
+    name: undefined,           // opsiyonel: istersen template adını kopyalayabilirsin
+    assigned_role: undefined,  // opsiyonel: template default_role’ü kopyalayabilirsin
+    assignee_id: s.assignee_id ?? null
+  }))
+  await sb.from('step_instances').insert(stepsPayload)
+}
+
 
   return NextResponse.json(created)
 }
