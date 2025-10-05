@@ -48,7 +48,7 @@ export default function Sidebar() {
     { href: '/calendar', label: 'Takvim' },
      { href: 'admin/permissions', label: 'Yetkiler' },
     { href: '/settings/notifications', label: 'Bildirimler' },
-    { href: '/auth/login', label: 'Giriş' },
+    { href: '/login', label: 'Giriş' },
     { href: '/logs', label: 'Log Geçmişi' },
   ];
 
