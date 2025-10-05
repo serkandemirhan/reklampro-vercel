@@ -49,13 +49,21 @@ export default function CustomersPage() {
 
         <div className="card p-4">
           <table className="w-full text-sm">
-            <thead><tr className="text-left"><th>#</th><th>Ad</th><th>İletişim</th><th className="text-right">İşlem</th></tr></thead>
+            <thead>
+              <tr className="text-left"><th>#</th><th>Ad</th><th>İletişim</th><th className="text-right">İşlem</th></tr>
+            </thead>
             <tbody>
               {items.map(c => (
                 <tr key={c.id} className="border-t">
                   <td className="py-2">{c.id}</td>
-                  <td><input className="input" value={c.name} onChange={e => setItems(xs => xs.map(x => x.id===c.id?{...x, name:e.target.value}:x))} /></td>
-                  <td><input className="input" value={c.contact || ''} onChange={e => setItems(xs => xs.map(x => x.id===c.id?{...x, contact:e.target.value}:x))} /></td>
+                  <td>
+                    <input className="input" value={c.name}
+                      onChange={e => setItems(xs => xs.map(x => x.id===c.id ? { ...x, name: e.target.value } : x))} />
+                  </td>
+                  <td>
+                    <input className="input" value={c.contact || ''}
+                      onChange={e => setItems(xs => xs.map(x => x.id===c.id ? { ...x, contact: e.target.value } : x))} />
+                  </td>
                   <td className="text-right">
                     <button className="btn mr-2" onClick={() => save(c)}>Kaydet</button>
                     <button className="text-red-600" onClick={() => del(c.id)}>Sil</button>
