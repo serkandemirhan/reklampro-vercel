@@ -10,7 +10,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 
 export default function Page(){
   const ref = useRef<HTMLDivElement>(null);
-  const [cal, setCal] = useState<FullCalendar.Calendar | null>(null);
+  const [cal, setCal] = useState<Calendar | null>(null);
   const [events, setEvents] = useState<any[]>([]);
 
   const load = async()=>{
@@ -21,7 +21,7 @@ export default function Page(){
 
   useEffect(()=>{
     if (!ref.current) return;
-    const calendar = new FullCalendar.Calendar(ref.current, {
+    const calendar = new Calendar(ref.current, {
       plugins: [dayGridPlugin, timeGridPlugin, interactionPlugin],
       initialView: 'timeGridWeek',
       editable: true,
