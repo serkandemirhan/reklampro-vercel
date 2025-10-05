@@ -33,6 +33,8 @@ export default function Sidebar() {
         {(role === 'admin' || role === 'manager') && <NavItem href="/processes">Süreç Ayarları</NavItem>}
         <NavItem href="/jobs/1">Görev Detay (Ör.)</NavItem>
         <NavItem href="/board">Kanban</NavItem>
+        <NavItem href="/processes">Süreçler</NavItem>
+        <NavItem href="/jobs/new">İş Oluştur</NavItem>
         <NavItem href="/files">Dosyalar</NavItem>
         <NavItem href="/logs">Log Geçmişi</NavItem>
         <NavItem href="/admin/users">Kullanıcı Yönetimi</NavItem>
