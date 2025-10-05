@@ -51,6 +51,9 @@ export default function Sidebar() {
     { href: '/settings/notifications', label: 'Bildirimler' },
     { href: '/login', label: 'Giriş' },
     { href: '/logs', label: 'Log Geçmişi' },
+     { href: '/admin/users', label: 'Kullanıcı Yönetimi' },
+    { href: '/admin/roles', label: 'Yetkiler' },
+    { href: '/settings', label: 'Ayarlar' },
   ];
 
   const adminOnly = [
