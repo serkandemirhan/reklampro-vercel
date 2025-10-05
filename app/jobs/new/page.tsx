@@ -1,8 +1,5 @@
-
-    'use client';
+ 'use client';
     import RequireAuth from '@/components/RequireAuth';
-
-'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 
