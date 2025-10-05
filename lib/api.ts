@@ -1,17 +1,14 @@
-
-import { supabase } from './supabase'
-
-export const API_BASE = '' // same origin
-
-export async function api<T = any>(path: string, opts: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(opts.headers as Record<string, string> || {}),
+export async function api<T=any>(path: string, opts: RequestInit = {}): Promise<T> {
+  const headers: Record<string,string> = { 'Content-Type': 'application/json', ...(opts.headers as any || {}) }
+  const res = await fetch(path, { ...opts, headers })
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`
+    try {
+      const j = await res.json()
+      if (j?.error) msg = j.error
+    } catch {}
+    throw new Error(msg)
   }
-  const { data: { session } } = await supabase.auth.getSession();
-  const tok = session?.access_token;
-  if (tok) headers['Authorization'] = `Bearer ${tok}`;
-  const res = await fetch(`${API_BASE}${path}`, { ...opts, headers });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-  return res.json();
+  const ct = res.headers.get('content-type') || ''
+  return (ct.includes('application/json') ? res.json() : (res.text() as any)) as Promise<T>
 }
