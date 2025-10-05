@@ -1,7 +1,8 @@
-
 'use client';
-import { supabase } from '@/lib/supabase';
+import RequireAuth from '@/components/RequireAuth';
 import { useEffect, useState } from 'react';
+import { api } from '@/lib/api';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 
 export default function RequireAuth({ children }: { children: React.ReactNode }) {
