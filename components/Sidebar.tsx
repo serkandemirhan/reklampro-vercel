@@ -1,6 +1,4 @@
 'use client';
-import RequireAuth from '@/components/RequireAuth';
-import { api } from '@/lib/api';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
