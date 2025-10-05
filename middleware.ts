@@ -1,13 +1,16 @@
 // middleware.ts
-import { NextRequest } from 'next/server';
-import { updateSession } from '@supabase/auth-helpers-nextjs';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 
 export async function middleware(req: NextRequest) {
-  // Supabase auth çerezlerini güncel tutar (SSR/api route'larda oturum görünür)
-  return await updateSession(req);
+  const res = NextResponse.next()
+  // Supabase auth çerezlerini burada senkronize ediyoruz
+  const supabase = createMiddlewareClient({ req, res })
+  await supabase.auth.getSession()
+  return res
 }
 
-// _next/static vb. hariç tüm route’larda çalışsın:
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
-};
+}
