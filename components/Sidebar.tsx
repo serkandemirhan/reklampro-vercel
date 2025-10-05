@@ -37,6 +37,7 @@ export default function Sidebar() {
         <NavItem href="/jobs/new">İş Oluştur</NavItem>
         <NavItem href="/files">Dosyalar</NavItem>
         <NavItem href="/customer">Müşteriler</NavItem>
+        <NavItem href="/jobs">İş Talepleri</NavItem>
 
         <NavItem href="/logs">Log Geçmişi</NavItem>
         <NavItem href="/admin/users">Kullanıcı Yönetimi</NavItem>
