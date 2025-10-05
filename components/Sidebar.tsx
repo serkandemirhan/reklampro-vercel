@@ -34,20 +34,20 @@ export default function Sidebar() {
 
   // ——— ÜST ve ALT link listeleri ———
   const topLinks = [
-    { href: '/dashboard', label: 'Ana Sayfa' },
+    { href: '/dashboard', label: 'Ana Sayfa' }, 
+    { href: '/jobs', label: 'İş Talepleri' },
      { href: '/jobs/new', label: 'İş Oluştur' },
-    { href: '/files', label: 'Dosyalar' },  
-    { href: '/requests', label: 'İş Talepleri' },
-    { href: '/tasks', label: 'Görevler' },
+    { href: '/files', label: 'Dosyalar' },     
+    { href: '/board', label: 'Kanban' },
     { href: '/jobs', label: 'Görev Detay (Öz)' },
  
   ];
 
   const bottomLinksBase = [
-      { href: '/customers', label: 'Müşteriler' },
+      { href: '/customer', label: 'Müşteriler' },
     { href: '/calendar', label: 'Takvim' },
      { href: 'admin/permissions', label: 'Yetkiler' },
-    { href: '/notifications', label: 'Bildirimler' },
+    { href: '/settings/notifications', label: 'Bildirimler' },
     { href: '/auth/login', label: 'Giriş' },
     { href: '/logs', label: 'Log Geçmişi' },
   ];
