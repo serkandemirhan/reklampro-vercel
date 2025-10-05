@@ -35,7 +35,7 @@ export default function Sidebar() {
   // ——— ÜST ve ALT link listeleri ———
   const topLinks = [
     { href: '/dashboard', label: 'Ana Sayfa' },
-     { href: '/orders/new', label: 'İş Oluştur' },
+     { href: '/jobs/new', label: 'İş Oluştur' },
     { href: '/files', label: 'Dosyalar' },  
     { href: '/requests', label: 'İş Talepleri' },
     { href: '/tasks', label: 'Görevler' },
