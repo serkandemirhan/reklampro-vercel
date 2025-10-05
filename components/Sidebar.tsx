@@ -40,6 +40,7 @@ export default function Sidebar() {
     { href: '/files', label: 'Dosyalar' },     
     { href: '/board', label: 'Kanban' },
     { href: '/jobs', label: 'Görev Detay (Öz)' },
+      { href: '/processes', label: 'Süreçler' },
  
   ];
 
