@@ -95,23 +95,69 @@ export default function ProcessesPage() {
                 <th className="w-24 text-right">Sıra</th>
               </tr>
             </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id} className="border-t">
-                  <td className="py-2">{p.id}</td>
-                  <td>{p.name}</td>
-                  <td>{p.default_role}</td>
-                  <td className="text-right">{p.order_index}</td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-3 text-gray-500">
-                    Kayıt yok.
-                  </td>
-                </tr>
-              )}
-            </tbody>
+              <tbody>
+                {items.map((p) => (
+                  <tr key={p.id} className="border-t">
+                    <td className="py-2">{p.id}</td>
+                    <td>
+                      <input
+                        className="input"
+                        value={p.name}
+                        onChange={(e) =>
+                          setItems(xs => xs.map(x => x.id === p.id ? { ...x, name: e.target.value } as any : x))
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        value={p.default_role}
+                        onChange={(e) =>
+                          setItems(xs => xs.map(x => x.id === p.id ? { ...x, default_role: e.target.value } as any : x))
+                        }
+                      />
+                    </td>
+                    <td className="text-right">
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          className="btn"
+                          onClick={async () => {
+                            try {
+                              await api(`/api/processes/${p.id}`, {
+                                method: 'PATCH',
+                                body: JSON.stringify({
+                                  name: p.name,
+                                  default_role: p.default_role,
+                                  order_index: p.order_index ?? 0
+                                })
+                              })
+                              await load()
+                            } catch (e:any) {
+                              alert(e?.message || 'Güncellenemedi (aynı ad olabilir)')
+                            }
+                          }}
+                        >
+                          Kaydet
+                        </button>
+                        <button
+                          className="text-red-600"
+                          onClick={async () => {
+                            if (!confirm('Silinsin mi?')) return
+                            await api(`/api/processes/${p.id}`, { method: 'DELETE' })
+                            await load()
+                          }}
+                        >
+                          Sil
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr><td colSpan={4} className="py-3 text-gray-500">Kayıt yok.</td></tr>
+                )}
+              </tbody>
+
           </table>
         </div>
       </div>
