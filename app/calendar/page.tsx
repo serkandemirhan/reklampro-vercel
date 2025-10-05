@@ -85,3 +85,28 @@ export default function Page() {
   };
 
   return (
+    <RequireAuth>
+      <div className="space-y-3">
+        <div className="card p-4 flex items-center justify-between">
+          <div className="font-medium">Takvim</div>
+          <div className="flex gap-2">
+            <button className="btn" onClick={create}>Örnek Etkinlik Ekle</button>
+            <a
+              className="btn"
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                window.open((process.env.NEXT_PUBLIC_SUPABASE_URL || '') + '/calendar/ics', '_blank');
+              }}
+            >
+              ICS Dışa Aktar
+            </a>
+          </div>
+        </div>
+        <div className="card p-2">
+          <div ref={ref} />
+        </div>
+      </div>
+    </RequireAuth>
+  );
+}
