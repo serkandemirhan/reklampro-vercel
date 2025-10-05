@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
-import { setToken } from '@/lib/api';
+
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
