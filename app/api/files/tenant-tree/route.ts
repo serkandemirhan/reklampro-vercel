@@ -30,18 +30,20 @@ export async function GET() {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     for (const item of data || []) {
-      // item.id varsa dosyadır; yoksa klasördür
-      if (item.id) {
+      // Dosya mı klasör mü?
+      if ((item as any).id) {
+        // Dosya
         const key = `${path}/${item.name}`
-        const folder = path.replace(`${root}/`, '') || 'Tenant1'
+        const folder = path.replace(`${root}/`, '') || '(Kök)'
         keys.push(key)
         meta[key] = {
           name: item.name,
-          size: item.metadata?.size ?? 0,
-          updated_at: item.updated_at,
+          size: (item as any).metadata?.size ?? 0,
+          updated_at: (item as any).updated_at,
           folder
         }
       } else {
+        // Klasör
         queue.push(`${path}/${item.name}`)
       }
     }
@@ -53,14 +55,23 @@ export async function GET() {
     .createSignedUrls(keys, 3600)
   if (signErr) return NextResponse.json({ error: signErr.message }, { status: 400 })
 
-  const rows: FileRow[] = (signed || []).map(s => ({
-    key: s.path,
-    url: s.signedUrl!,
-    name: meta[s.path].name,
-    size: meta[s.path].size,
-    updated_at: meta[s.path].updated_at,
-    folder: meta[s.path].folder
-  }))
+  // path veya signedUrl null dönebilir -> filtrele
+  const usable = (signed ?? []).filter(
+    (s): s is { path: string; signedUrl: string } => !!s.path && !!s.signedUrl
+  )
+
+  const rows: FileRow[] = usable.flatMap(s => {
+    const m = meta[s.path]
+    if (!m) return [] // beklenmedik durum: meta bulunamadı
+    return [{
+      key: s.path,
+      url: s.signedUrl,
+      name: m.name,
+      size: m.size,
+      updated_at: m.updated_at,
+      folder: m.folder
+    }]
+  })
 
   return NextResponse.json(rows)
 }
