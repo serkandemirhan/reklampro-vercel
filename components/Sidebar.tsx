@@ -36,10 +36,11 @@ export default function Sidebar() {
   const topLinks = [
     { href: '/', label: 'Ana Sayfa' }, 
     { href: '/jobs', label: 'İş Talepleri' },
+     { href: '/steps', label: 'Görevler' },
      { href: '/jobs/new', label: 'İş Oluştur' },
     { href: '/files', label: 'Dosyalar' },     
     { href: '/board', label: 'Kanban' },
-    { href: '/jobs', label: 'Görev Detay (Öz)' },
+
       { href: '/processes', label: 'Süreçler' },
  
   ];
