@@ -1,78 +1,69 @@
-import { NextResponse } from 'next/server'
-import { supa } from '../_utils/supabase'
+// app/api/jobs/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { supa } from '../_utils/supabase'   // ✅ düzeltildi
 
-function isAdmin(role: any) {
-  const r = String(role || '').toLowerCase()
-  return r === 'admin' || r === 'manager'
-}
+export async function GET(req: NextRequest) {
+  try {
+    const sb = supa()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-export async function GET(_req: Request, { params }: { params:{ id:string } }) {
-  const sb = supa()
-  const { data: { user } } = await sb.auth.getUser()
-  if (!user) return NextResponse.json({ error:'unauthorized' }, { status:401 })
+    const url = new URL(req.url)
+    const limit = Number(url.searchParams.get('limit') || 100)
 
-  const id = Number(params.id)
-  const { data: job, error } = await sb
-    .from('job_requests')
-    .select('id, job_no, title, description, status, customer_id, created_at')
-    .eq('id', id)
-    .single()
-  if (error) return NextResponse.json({ error:error.message }, { status:400 })
+    const { data, error } = await sb
+      .from('job_requests')
+      .select('id, job_no, title, description, status, customer_id, created_at')
+      .order('id', { ascending: false })
+      .limit(limit)
 
-  // müşteri adı
-  let customer_name: string | null = null
-  if (job.customer_id) {
-    const { data: c } = await sb.from('customers').select('name').eq('id', job.customer_id).single()
-    customer_name = c?.name ?? null
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json(data)
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message ?? 'Unexpected error' }, { status: 500 })
   }
-
-  return NextResponse.json({ ...job, customer_name })
 }
 
-export async function PATCH(req: Request, { params }: { params:{ id:string } }) {
-  const body = await req.json()
-  const sb = supa()
-  const { data: { user } } = await sb.auth.getUser()
-  if (!user) return NextResponse.json({ error:'unauthorized' }, { status:401 })
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const sb = supa()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // rol kontrolü
-  const role = (user as any).app_metadata?.role
-  if (!isAdmin(role)) return NextResponse.json({ error:'forbidden' }, { status:403 })
+    const tenantId =
+      // @ts-ignore
+      user?.app_metadata?.tenant_id ?? body?.tenant_id ?? 1
 
-  const id = Number(params.id)
-
-  // job güncelle
-  const patchBody: any = {}
-  if (typeof body.title === 'string') patchBody.title = body.title
-  if (typeof body.description === 'string') patchBody.description = body.description
-  if (typeof body.status === 'string') patchBody.status = body.status
-
-  const { data: updated, error } = await sb
-    .from('job_requests')
-    .update(patchBody)
-    .eq('id', id)
-    .select()
-    .single()
-
-  if (error) return NextResponse.json({ error:error.message }, { status:400 })
-
-  // CASCADE: job status → step_instances.status
-  if (typeof body.status === 'string') {
-    let stepStatus: string | null = null
-    if (body.status === 'paused')   stepStatus = 'paused'
-    else if (body.status === 'canceled') stepStatus = 'canceled'
-    else if (body.status === 'in_progress') stepStatus = null // dokunma
-    else if (body.status === 'closed') stepStatus = 'canceled' // kapatınca iptal sayalım
-
-    if (stepStatus) {
-      // done olanları bozmadan diğerlerini güncelle
-      await sb
-        .from('step_instances')
-        .update({ status: stepStatus })
-        .eq('job_id', id)
-        .neq('status', 'done')
+    const jobPayload: any = {
+      tenant_id: tenantId,
+      customer_id: body.customer_id ?? null,
+      title: String(body.title || body.customer_name || 'İş Talebi'),
+      description: String(body.description || ''),
+      status: body.status ?? 'in_progress',
     }
-  }
 
-  return NextResponse.json(updated)
-}
+    const { data: job, error: e1 } = await sb
+      .from('job_requests')
+      .insert(jobPayload)
+      .select('*')
+      .single()
+
+    if (e1) return NextResponse.json({ error: e1.message }, { status: 400 })
+
+    const steps = Array.isArray(body.steps) ? body.steps : []
+    if (steps.length > 0) {
+      const rows = steps.map((s: any) => ({
+        tenant_id: tenantId,
+        job_id: job.id,
+        template_id: s.template_id ?? null,
+        name: String(s.name || s.title || 'Adım'),
+        est_duration_hours: s.est_duration_hours ?? s.estimated_hours ?? null,
+        required_qty: s.required_qty ?? s.required ?? null,
+        status: 'pending',
+      }))
+      const { error: e2 } = await sb.from('step_instances').insert(rows)
+      if (e2) return NextResponse.json({ error: e2.message }, { status: 400 })
+    }
+
+    const job_no = job.job_no ??
