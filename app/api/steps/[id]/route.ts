@@ -1,5 +1,7 @@
-import { NextResponse } from 'next/server'
+
 import { supa } from '../../_utils/supabase'
+import { NextRequest, NextResponse } from 'next/server'
+
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const sb = supa()
