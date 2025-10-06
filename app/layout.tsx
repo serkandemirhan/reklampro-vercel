@@ -1,25 +1,32 @@
-
+// app/layout.tsx
 import './globals.css'
-import Sidebar from '@/components/Sidebar'
+import { cookies } from 'next/headers'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
+import Sidebar from '@/components/Sidebar' // mevcut ise
+import type { ReactNode } from 'react'
 
-export const metadata = { title: 'Process Tracker' }
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  const sb = createServerComponentClient({ cookies })
+  const { data: { user } } = await sb.auth.getUser()
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="tr">
       <body>
-        <div className="min-h-screen flex">
-          <Sidebar />
-          <main className="flex-1 p-6">
-            <header className="mb-6 flex items-center justify-between">
-              <h1 className="text-2xl font-semibold">Process Tracker</h1>
-              <div className="flex items-center gap-2"><a href="/login" className="link">Giriş/Kayıt</a>
-                <input placeholder="Ara..." className="input w-64" />
-              </div>
-            </header>
-            <div className="space-y-6">{children}</div>
+        {user ? (
+          <div className="flex min-h-screen">
+            <aside className="w-64 shrink-0 border-r">
+              <Sidebar />
+            </aside>
+            <main className="flex-1 p-4">
+              {children}
+            </main>
+          </div>
+        ) : (
+          // Oturum yoksa sade görünüm: sadece içerik (login sayfası)
+          <main className="min-h-screen p-4">
+            {children}
           </main>
-        </div>
+        )}
       </body>
     </html>
   )
