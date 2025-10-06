@@ -1,85 +1,68 @@
+import { NextResponse } from 'next/server'
+import { supa } from '../../../_utils/supabase'
 
-import { supa } from '../../_utils/supabase'
-import { NextRequest, NextResponse } from 'next/server'
+const STEPS_TABLE = 'step_instances'
+const LOGS_TABLE  = 'step_logs'
 
-
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
-  const sb = supa()
-  const { data: { user } } = await sb.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  // step
-  const { data: step, error } = await sb.from('step_instances')
-    .select('*')
-    .eq('id', Number(params.id))
-    .single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-
-  // job (özet)
-  const { data: job, error: jobErr } = await sb.from('job_requests')
-    .select('id, job_no, title, customer_id')
-    .eq('id', step.job_id)
-    .single()
-  if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 400 })
-
-  // customer (opsiyonel)
-  let customer: any = null
-  if (job?.customer_id) {
-    const { data: c, error: cErr } = await sb.from('customers')
-      .select('id, name')
-      .eq('id', job.customer_id)
-      .single()
-    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 })
-    customer = c
-  }
-
-  return NextResponse.json({ step, job, customer })
+type Body = {
+  assigned_user?: string | null
+  action?: 'assign'|'start'|'pause'|'resume'|'complete'|'cancel'
+  note?: string
+  pause_reason?: string | null
+  qty_delta?: number
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const body = await req.json()
   const sb = supa()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await sb
-    .from('step_instances')
-    .update(body)
-    .eq('id', Number(params.id))
-    .select()
-    .single()
+  const id = Number(params.id)
+  const body = (await req.json()) as Body
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  const { data: step, error: gerr } = await sb.from(STEPS_TABLE).select('*').eq('id', id).single()
+  if (gerr || !step) return NextResponse.json({ error: gerr?.message || 'Not found' }, { status: 404 })
 
-  // Opsiyonel audit – Hata oluşursa önemsemiyoruz (await ile al, hata değişkeninde kalsın)
-  const { error: _auditErr } = await sb.from('audit_logs').insert({
-    tenant_id: user.app_metadata?.tenant_id ?? 1,
-    user_id: user.id,
-    model: 'step_instances',
-    entity_id: data.id,
-    action: 'updated',
-    field: 'status',
-    old_value: null,
-    new_value: body.status ?? null
-  })
-  // _auditErr varsa bile ignore ediyoruz
+  const patch: Record<string, any> = {}
+  const now = new Date().toISOString()
+  if (body.assigned_user !== undefined) patch.assigned_user = body.assigned_user
 
-  return NextResponse.json(data)
-}
-
-export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) {
-  try {
-    const id = Number(ctx.params.id)
-    if (Number.isNaN(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-
-    const sb = supa()
-    const { data: { user } } = await sb.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const { error } = await sb.from('step_instances').delete().eq('id', id)
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-    return NextResponse.json({ ok: true })
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 })
+  const current: string = step.status || 'not_started'
+  const allow: Record<string,string[]> = {
+    not_started: ['in_progress','canceled'],
+    in_progress: ['paused','completed','canceled'],
+    paused:      ['in_progress','canceled'],
+    completed:   [],
+    canceled:    []
   }
+
+  const go = (to: string) => { if (allow[current]?.includes(to)) patch.status = to }
+
+  switch (body.action) {
+    case 'start':    go('in_progress'); if (!step.started_at) patch.started_at = now; break
+    case 'pause':    go('paused'); patch.pause_reason = body.pause_reason ?? null; break
+    case 'resume':   if (current==='paused') patch.status='in_progress', patch.pause_reason=null; break
+    case 'complete': go('completed'); patch.completed_at = now; break
+    case 'cancel':   go('canceled'); break
+  }
+
+  if (typeof body.qty_delta === 'number' && !isNaN(body.qty_delta))
+    patch.production_qty = Number(step.production_qty || 0) + Number(body.qty_delta)
+
+  if (body.note !== undefined) patch.note = body.note
+
+  const { error: uerr, data: updated } = await sb.from(STEPS_TABLE).update(patch).eq('id', id).select().single()
+  if (uerr) return NextResponse.json({ error: uerr.message }, { status: 400 })
+
+  await sb.from(LOGS_TABLE).insert({
+    step_id: id,
+    old_status: current,
+    new_status: updated.status,
+    reason: updated.pause_reason ?? body.pause_reason ?? null,
+    qty_delta: body.qty_delta ?? null,
+    note: body.note ?? null,
+    changed_by: user.id,
+  })
+
+  return NextResponse.json(updated)
 }
