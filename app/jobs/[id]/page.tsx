@@ -2,7 +2,7 @@
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
-import JobDetailClient from '@/components/jobs/JobDetailClient'
+import JobDetailClient from '../../../components/jobs/JobDetailClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,14 +10,12 @@ type PageProps = { params: { id: string } }
 
 export default async function JobDetailPage({ params }: PageProps) {
   const jobId = Number(params.id)
-  if (Number.isNaN(jobId)) {
-    return <div className="p-6">Geçersiz iş ID: {params.id}</div>
-  }
+  if (Number.isNaN(jobId)) return <div className="p-6">Geçersiz iş ID.</div>
 
   const supabase = createServerComponentClient({ cookies })
   const { data: { user } } = await supabase.auth.getUser()
   const role = (user as any)?.app_metadata?.role
-  const isAdmin = role === 'admin' || role === 'manager' || role === 'superadmin' || true // demo
+  const isAdmin = true // (demo)
   const isSuperadmin = role === 'superadmin'
 
   // İş
@@ -26,25 +24,27 @@ export default async function JobDetailPage({ params }: PageProps) {
     .select('id, job_no, title, description, status, customer_id, tenant_id, created_at')
     .eq('id', jobId)
     .single()
-  if (e1 || !job) {
-    return (
-      <div className="p-6">
-        İş bulunamadı. {e1?.message && <span>({e1.message})</span>}
-        <div className="mt-4">
-          <Link href="/jobs" className="text-blue-600 underline">İş listesine dön</Link>
-        </div>
-      </div>
-    )
-  }
+  if (e1 || !job) return <div className="p-6">İş bulunamadı.</div>
 
-  // Adımlar
-  const { data: steps } = await supabase
+  // Adım instanceları
+  const { data: stepInstances } = await supabase
     .from('step_instances')
-    .select('id, job_id, name, status, est_duration_hours, required_qty, template_id')
+    .select('id, job_id, template_id, name, status, est_duration_hours, required_qty')
     .eq('job_id', jobId)
     .order('id', { ascending: true })
 
-  // Müşteri listesi (isim göstermek ve değiştirmek için)
+  // Tüm şablonlar (süreç listesi)
+  let templates: any[] = []
+  {
+    const { data: t1 } = await supabase.from('step_templates').select('id, name').order('id')
+    if (t1 && t1.length) templates = t1
+    else {
+      const { data: t2 } = await supabase.from('process_templates').select('id, name').order('id')
+      templates = t2 ?? []
+    }
+  }
+
+  // Müşteri listesi
   const { data: customers } = await supabase
     .from('customers')
     .select('id, name')
@@ -53,6 +53,12 @@ export default async function JobDetailPage({ params }: PageProps) {
   const jobNo = job.job_no ?? `JOB-${job.id}`
   const customerName =
     customers?.find((c) => c.id === job.customer_id)?.name ?? (job.customer_id ?? '—')
+
+  // Aktif/pasif bilgisini hazırlayalım
+  const activeByTemplate: Record<number, any> = {}
+  ;(stepInstances ?? []).forEach((s) => {
+    if (s.template_id != null) activeByTemplate[s.template_id] = s
+  })
 
   return (
     <div className="p-6 space-y-6">
@@ -76,7 +82,8 @@ export default async function JobDetailPage({ params }: PageProps) {
         isSuperadmin={isSuperadmin}
         tenantId={job.tenant_id ?? null}
         createdAt={job.created_at ?? null}
-        steps={steps ?? []}
+        steps={stepInstances ?? []}
+        templates={templates ?? []}
       />
     </div>
   )
