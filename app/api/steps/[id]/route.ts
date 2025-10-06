@@ -1,6 +1,38 @@
-
 import { NextResponse } from 'next/server'
 import { supa } from '../../_utils/supabase'
+
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const sb = supa()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // step
+  const { data: step, error } = await sb.from('step_instances')
+    .select('*')
+    .eq('id', Number(params.id))
+    .single()
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // job (özet)
+  const { data: job, error: jobErr } = await sb.from('job_requests')
+    .select('id, job_no, title, customer_id')
+    .eq('id', step.job_id)
+    .single()
+  if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 400 })
+
+  // customer (opsiyonel)
+  let customer: any = null
+  if (job?.customer_id) {
+    const { data: c, error: cErr } = await sb.from('customers')
+      .select('id, name')
+      .eq('id', job.customer_id)
+      .single()
+    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 400 })
+    customer = c
+  }
+
+  return NextResponse.json({ step, job, customer })
+}
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const body = await req.json()
@@ -8,10 +40,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data, error } = await sb.from('step_instances').update(body).eq('id', Number(params.id)).select().single()
+  const { data, error } = await sb
+    .from('step_instances')
+    .update(body)
+    .eq('id', Number(params.id))
+    .select()
+    .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // optional: audit trail example
+  // Opsiyonel audit
   await sb.from('audit_logs').insert({
     tenant_id: user.app_metadata?.tenant_id ?? 1,
     user_id: user.id,
@@ -21,7 +58,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     field: 'status',
     old_value: null,
     new_value: body.status ?? null
-  })
+  }).catch(() => {})
 
   return NextResponse.json(data)
 }
