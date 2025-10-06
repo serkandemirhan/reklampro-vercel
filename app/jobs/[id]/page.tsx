@@ -1,5 +1,30 @@
 import StepsTable from './StepsTable'// dosyanın üstüne ekleyin
 import AssignUserCell from './AssignUserCell'
+// app/jobs/[id]/page.tsx
+import Link from 'next/link' // ⬅️ ekle
+
+export default async function JobDetailPage({ params }: { params: { id: string } }) {
+  const jobId = Number(params.id)
+
+  // ... mevcut veri yükleme kodların ...
+
+  return (
+    <div>
+      {/* ÜST BAŞLIK SATIRI */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl font-semibold">İş Detayı</h1>
+
+        {/* ➜ Görev ekranı butonu */}
+        <Link href={`/jobs/${jobId}/tasks`} className="btn btn-sm">
+          Görev ekranını aç
+        </Link>
+      </div>
+
+      {/* ... sayfanın kalan kısmı (formlar, adımlar tablosu vs.) ... */}
+    </div>
+  )
+}
+
 
 // ... tablo başlıklarında:
 <th>Sorumlu</th>
