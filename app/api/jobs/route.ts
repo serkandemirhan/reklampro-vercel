@@ -1,70 +1,86 @@
+// app/api/jobs/route.ts
 import { NextResponse } from 'next/server'
 import { supa } from '../_utils/supabase'
+
+type JobRow = {
+  id: number
+  job_no: string
+  title: string
+  description: string | null
+  status: string | null
+  customer_id: number | null
+  created_at: string
+}
 
 export async function GET() {
   const sb = supa()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { data, error } = await sb
+  // 1) İş taleplerini al
+  const { data: jobs, error } = await sb
     .from('job_requests')
-    .select('id, job_no, title, description, customer_id, created_at')
+    .select('id, job_no, title, description, status, customer_id, created_at')
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json(data)
+
+  // 2) Müşteri adlarını tek IN sorgusu ile getir
+  const customerIds = Array.from(
+    new Set((jobs || []).map(j => j.customer_id).filter(Boolean) as number[])
+  )
+
+  let namesById: Record<number, string> = {}
+  if (customerIds.length > 0) {
+    const { data: customers, error: cErr } = await sb
+      .from('customers')
+      .select('id, name')
+      .in('id', customerIds)
+
+    if (cErr) {
+      // müşteri tablosu erişilemezse isimleri boş ver
+      namesById = {}
+    } else {
+      namesById = Object.fromEntries((customers || []).map(c => [c.id, c.name]))
+    }
+  }
+
+  const payload = (jobs || []).map(j => ({
+    ...j,
+    customer_name: j.customer_id ? namesById[j.customer_id] ?? null : null,
+  }))
+
+  return NextResponse.json(payload)
 }
 
+/**
+ * İsteğe bağlı: Sizde POST zaten varsa bırakın.
+ * Aşağıdaki iskelet, yeni iş talebi oluşturmak içindir.
+ */
 export async function POST(req: Request) {
+  const body = await req.json()
   const sb = supa()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const body = await req.json()
-  const tenantId = (user.app_metadata as any)?.tenant_id ?? 1
+  // Örnek alanlar: title, description, customer_id, status
+  const { title, description, customer_id, status } = body
 
-  // 1) İş talebi
-  const { data: created, error: e1 } = await sb
+  const job_no = body.job_no ?? `T${new Date().toISOString().slice(0,10).replace(/-/g,'')}${Math.floor(Math.random()*1e6).toString().padStart(6,'0')}`
+
+  const { data: created, error } = await sb
     .from('job_requests')
     .insert({
-      tenant_id: tenantId,
-      customer_id: body.customer_id ?? null,
-      title: body.title,
-      description: body.description ?? '',
-      created_by: user.id
+      job_no,
+      title,
+      description: description ?? null,
+      customer_id: customer_id ?? null,
+      status: status ?? 'open',
     })
-    .select('id, job_no')
+    .select()
     .single()
 
-  if (e1) return NextResponse.json({ error: `job_insert: ${e1.message}` }, { status: 400 })
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // 2) Seçilen süreçlerden görevleri üret
-  if (Array.isArray(body.steps) && body.steps.length > 0) {
-    // İsteğe bağlı: şablon adını kopyalayalım
-    const ids = body.steps.map((s: any) => s.template_id).filter(Boolean)
-    let nameMap = new Map<number, string>()
-    if (ids.length) {
-      const { data: temps, error } = await sb.from('process_templates')
-        .select('id, name')
-        .in('id', ids)
-      if (!error && temps) nameMap = new Map(temps.map(t => [t.id as number, t.name as string]))
-    }
-
-    const stepsPayload = body.steps.map((s: any) => ({
-      tenant_id: tenantId,
-      job_id: created.id,
-      template_id: s.template_id,
-      name: nameMap.get(s.template_id) || null,
-      est_duration_hours: s.est_duration_hours ?? null,
-      required_qty: s.required_qty ?? null,
-      produced_qty: 0,
-      status: 'pending',
-      assignee_id: s.assignee_id ?? null
-    }))
-
-    const { error: e2 } = await sb.from('step_instances').insert(stepsPayload)
-    if (e2) return NextResponse.json({ error: `steps_insert: ${e2.message}` }, { status: 400 })
-  }
-
-  return NextResponse.json(created)
+  return NextResponse.json(created, { status: 201 })
 }
