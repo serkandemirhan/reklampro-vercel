@@ -77,3 +77,28 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json(joined)
 }
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { job_id, name, status, est_duration_hours, required_qty, template_id } = body || {}
+    if (!job_id || !name) return NextResponse.json({ error: 'job_id and name are required' }, { status: 400 })
+
+    const sb = supa()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const row = {
+      job_id,
+      name: String(name),
+      status: status ?? 'pending',
+      est_duration_hours: est_duration_hours ?? null,
+      required_qty: required_qty ?? null,
+      template_id: template_id ?? null,
+    }
+    const { data, error } = await sb.from('step_instances').insert(row).select('*').single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json(data, { status: 201 })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 })
+  }
+}
