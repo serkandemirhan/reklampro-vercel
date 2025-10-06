@@ -64,3 +64,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   return NextResponse.json(data)
 }
+
+export async function DELETE(req: NextRequest, ctx: { params: { id: string } }) {
+  try {
+    const id = Number(ctx.params.id)
+    if (Number.isNaN(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
+
+    const sb = supa()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const { error } = await sb.from('step_instances').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? 'Unexpected error' }, { status: 500 })
+  }
+}
