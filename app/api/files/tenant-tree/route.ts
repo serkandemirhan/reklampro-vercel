@@ -5,10 +5,10 @@ import { supa } from '../../_utils/supabase'
 type FileRow = {
   name: string
   key: string
-  url: string
+  url: string       // signed url (1 saat)
   size: number
   updated_at?: string
-  folder: string // "ACME/teklifler" gibi gösterim için
+  folder: string    // "ACME/teklifler" gibi
 }
 
 export async function GET() {
@@ -17,17 +17,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const tenantId = user.app_metadata?.tenant_id ?? 1
-
   const bucket = 'REKLAMPRO'
-  // BURASI DEĞİŞTİ:
   const root = `Tenant${tenantId}`
 
-
-
-  // Supabase storage.list recursive değil; biz gezeceğiz.
   const queue: string[] = [root]
-  const files: FileRow[] = []
-  const base = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const keys: string[] = []
+  const meta: Record<string, { name: string; size: number; updated_at?: string; folder: string }> = {}
 
   while (queue.length) {
     const path = queue.shift()!
@@ -35,34 +30,37 @@ export async function GET() {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     for (const item of data || []) {
-      if (item.id === null && item.name && item.created_at === null) {
-        // bazı SDK sürümlerinde klasörlerin id/created_at alanları null olabiliyor;
-        // item.metadata?.eTag benzeri de olmayabilir. "item.name" + path klasör demektir.
-      }
-      if (item.name && item.id === undefined && item.metadata === undefined) {
-        // Eski tip klasör işareti; yine klasör olarak ele al.
-      }
-
-      if (item.name && item.id) {
-        // dosya
+      // item.id varsa dosyadır; yoksa klasördür
+      if (item.id) {
         const key = `${path}/${item.name}`
-        const url = `${base}/storage/v1/object/public/${bucket}/${key}`
-        const folder = path.replace(`${root}/`, '') // "ACME/teklifler" vs.
-        files.push({
+        const folder = path.replace(`${root}/`, '') || 'Tenant1'
+        keys.push(key)
+        meta[key] = {
           name: item.name,
-          key,
-          url,
           size: item.metadata?.size ?? 0,
           updated_at: item.updated_at,
-          folder: folder || '(Kök)'
-        })
-      } else if (item.name && !item.id) {
-        // klasör
+          folder
+        }
+      } else {
         queue.push(`${path}/${item.name}`)
       }
     }
   }
 
-  // UI'da gruplamak istersen "folder" alanına göre gruplayabilirsin.
-  return NextResponse.json(files)
+  // 1 saatlik imzalı linkleri toplu üret
+  const { data: signed, error: signErr } = await sb.storage
+    .from(bucket)
+    .createSignedUrls(keys, 3600)
+  if (signErr) return NextResponse.json({ error: signErr.message }, { status: 400 })
+
+  const rows: FileRow[] = (signed || []).map(s => ({
+    key: s.path,
+    url: s.signedUrl!,
+    name: meta[s.path].name,
+    size: meta[s.path].size,
+    updated_at: meta[s.path].updated_at,
+    folder: meta[s.path].folder
+  }))
+
+  return NextResponse.json(rows)
 }
