@@ -30,7 +30,7 @@ export async function GET() {
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
     for (const item of data || []) {
-      // Dosya mı klasör mü?
+      // Supabase SDK tip farklarını tolere etmek için "any" kullanıyoruz.
       if ((item as any).id) {
         // Dosya
         const key = `${path}/${item.name}`
@@ -49,29 +49,28 @@ export async function GET() {
     }
   }
 
-  // 1 saatlik imzalı linkleri toplu üret
+  // 1 saatlik imzalı linkler
   const { data: signed, error: signErr } = await sb.storage
     .from(bucket)
     .createSignedUrls(keys, 3600)
   if (signErr) return NextResponse.json({ error: signErr.message }, { status: 400 })
 
-  // path veya signedUrl null dönebilir -> filtrele
-  const usable = (signed ?? []).filter(
-    (s): s is { path: string; signedUrl: string } => !!s.path && !!s.signedUrl
-  )
-
-  const rows: FileRow[] = usable.flatMap(s => {
+  // path veya signedUrl null olabilir -> reduce ile filtrele + topla
+  type SignedItem = { path: string | null; signedUrl: string; error?: string | null }
+  const rows: FileRow[] = (signed as SignedItem[] | null ?? []).reduce<FileRow[]>((acc, s) => {
+    if (!s.path || !s.signedUrl) return acc
     const m = meta[s.path]
-    if (!m) return [] // beklenmedik durum: meta bulunamadı
-    return [{
+    if (!m) return acc
+    acc.push({
       key: s.path,
       url: s.signedUrl,
       name: m.name,
       size: m.size,
       updated_at: m.updated_at,
       folder: m.folder
-    }]
-  })
+    })
+    return acc
+  }, [])
 
   return NextResponse.json(rows)
 }
