@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supa } from '../../../_utils/supabase'
+import { supa } from '../../_utils/supabase'
 
 const STEPS_TABLE = 'step_instances'
 const LOGS_TABLE  = 'step_logs'
