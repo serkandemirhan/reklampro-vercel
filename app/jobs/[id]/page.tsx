@@ -1,114 +1,146 @@
+'use client'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
-'use client';
-import { useEffect, useState } from 'react';
-import { api, API_BASE } from '@/lib/api';
-import Dropzone from '@/components/Dropzone';
-import Comments from '@/components/Comments';
-
-type FileItem = { id:number; key:string; name:string; url:string };
-type Step = {
-  id:number; job_id:number; name:string; status:string;
-  assigned_role:string; assignee_id:number|null;
-  est_duration_hours:number|null; required_qty:number|null; produced_qty:number|null;
+type Job = {
+  id:number; job_no:string; title:string; description:string|null;
+  status:'open'|'in_progress'|'paused'|'closed'|'canceled'|string;
+  customer_id:number|null; created_at:string; customer_name?:string|null
 }
 
-export default function Page({ params }: { params: { id: string }}) {
-  const jobId = Number(params.id);
-  const [steps, setSteps] = useState<Step[]>([]);
-  const [files, setFiles] = useState<FileItem[]>([]);
-  const [message, setMessage] = useState<string>('');
+type SessionUser = { id:string, role?:string }
 
-  const load = async()=>{
-    const data = await api<Step[]>(`/steps/by-job/${jobId}`);
-    setSteps(data);
-    const fl = await api<FileItem[]>(`/files/by-job/${jobId}`);
-    setFiles(fl);
-  }
-  useEffect(()=>{ load();
-    const ws = new WebSocket((process.env.NEXT_PUBLIC_API_BASE || 'ws://localhost:8000').replace('http','ws') + '/ws');
-    ws.onmessage = ev => {
-      try { const data = JSON.parse(ev.data); if (data.type === 'step.updated') load(); } catch {}
-    };
-    return ()=> ws.close();
-  }, [jobId]);
+export default function JobDetail({ params }: { params:{ id:string }}) {
+  const id = Number(params.id)
+  const [job, setJob] = useState<Job|null>(null)
+  const [user, setUser] = useState<SessionUser|null>(null)
+  const [edit, setEdit] = useState(false)
+  const [form, setForm] = useState({ title:'', description:'', status:'open' })
 
-  const patch = async (id:number, body:any)=>{
-    await api(`/steps/${id}`, { method:'PATCH', body: JSON.stringify(body) });
-    setMessage('Güncellendi ✔️'); load();
+  const load = async () => {
+    // job
+    const res = await fetch(`/api/jobs/${id}`)
+    if (res.ok) {
+      const j: Job = await res.json()
+      setJob(j)
+      setForm({
+        title: j.title ?? '',
+        description: j.description ?? '',
+        status: j.status as any
+      })
+    }
+    // me
+    const me = await fetch('/api/me').catch(()=>null) // varsa
+    if (me?.ok) {
+      const data = await me.json()
+      setUser({ id: data.id, role: data.app_metadata?.role })
+    }
   }
 
-  const register = async (key:string, original_name:string, stepId?:number)=>{
-    await api('/files/register?job_id='+jobId+'&step_id='+(stepId||'')+'&key='+encodeURIComponent(key)+'&original_name='+encodeURIComponent(original_name), { method:'POST' });
-    load();
+  useEffect(()=>{ load() }, [])
+
+  const canEdit = ['admin','manager'].includes(String(user?.role))
+
+  const save = async () => {
+    const res = await fetch(`/api/jobs/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(form)
+    })
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}))
+      alert(e.error || 'Kaydetme başarısız')
+      return
+    }
+    setEdit(false)
+    await load()
   }
 
-  const download = async (key:string)=>{
-    const d = await api<{url:string}>(`/files/download-url?key=${encodeURIComponent(key)}`);
-    window.open(d.url, '_blank');
+  const setStatus = async (status:'paused'|'canceled'|'in_progress'|'closed') => {
+    const res = await fetch(`/api/jobs/${id}`, {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({ status })
+    })
+    if (!res.ok) {
+      const e = await res.json().catch(()=>({}))
+      alert(e.error || 'Durum değiştirilemedi')
+      return
+    }
+    await load()
   }
+
+  if (!job) return <div className="p-4">Yükleniyor...</div>
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-xl font-semibold">Görev Detayları (Job #{jobId})</h2>
-      {message && <div className="text-green-700">{message}</div>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-semibold">İş Talebi #{job.job_no}</h2>
+        <div className="flex gap-2">
+          <Link className="btn" href="/jobs">Tüm Talepler</Link>
+          {canEdit && (
+            <button className="btn" onClick={()=>setEdit(e=>!e)}>{edit ? 'Vazgeç' : 'Düzenle'}</button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-3">
+        <div className="card p-4">
+          <div className="text-xs text-gray-500">Müşteri</div>
+          <div className="font-medium">{job.customer_name ?? '-'}</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-xs text-gray-500">Durum</div>
+          <div className="font-medium">{job.status}</div>
+        </div>
+        <div className="card p-4">
+          <div className="text-xs text-gray-500">Oluşturulma</div>
+          <div>{new Date(job.created_at).toLocaleString('tr-TR')}</div>
+        </div>
+      </div>
 
       <div className="card p-4">
-        <h3 className="font-medium mb-2">Dosyalar</h3>
-        {files.length === 0 ? <div className="text-sm text-gray-500">Henüz dosya yok.</div> :
-          <ul className="text-sm space-y-1">
-            {files.map(f=>(
-              <li key={f.id} className="flex items-center justify-between border-b py-1">
-                <span className="truncate">{f.name}</span>
-                <button className="link" onClick={()=>download(f.key)}>İndir</button>
-              </li>
-            ))}
-          </ul>
-        }
-      </div>
-
-      <div className="grid gap-4">
-        {steps.map(s=>(
-          <div key={s.id} className="card p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">{s.name}</div>
-                <div className="text-xs text-gray-500">Durum: {s.status} · Rol: {s.assigned_role} · Atanan: {s.assignee_id ?? '-'}</div>
-              </div>
-              <div className="flex gap-2">
-                <button className="btn" onClick={()=>patch(s.id,{ status:'in_progress' })}>Başlat</button>
-                <button className="btn" onClick={()=>patch(s.id,{ status:'done' })}>Tamamla</button>
-              </div>
+        {!edit ? (
+          <>
+            <div className="mb-2"><span className="text-xs text-gray-500">Başlık</span><div className="font-medium">{job.title}</div></div>
+            <div><span className="text-xs text-gray-500">Açıklama</span><div>{job.description ?? '-'}</div></div>
+          </>
+        ) : (
+          <div className="grid md:grid-cols-3 gap-3">
+            <div className="md:col-span-1">
+              <div className="label">Başlık</div>
+              <input className="input w-full" value={form.title} onChange={e=>setForm(f=>({ ...f, title:e.target.value }))}/>
             </div>
-            <div className="grid md:grid-cols-4 gap-3 mt-3">
-              <div>
-                <div className="label">Tahmini Süre (saat)</div>
-                <input type="number" className="input" defaultValue={s.est_duration_hours ?? ''} onBlur={e=>patch(s.id,{ est_duration_hours:Number(e.target.value) })} />
-              </div>
-              <div>
-                <div className="label">Toplam Gereksinim</div>
-                <input type="number" className="input" defaultValue={s.required_qty ?? ''} onBlur={e=>patch(s.id,{ required_qty:Number(e.target.value) })} />
-              </div>
-              <div>
-                <div className="label">Üretilen</div>
-                <input type="number" className="input" defaultValue={s.produced_qty ?? ''} onBlur={e=>patch(s.id,{ produced_qty:Number(e.target.value) })} />
-              </div>
-              <div>
-                <div className="label">Not / Log</div>
-                <input className="input" placeholder="Örn: 40 adet tamamlandı" onKeyDown={e=>{ if(e.key==='Enter') patch(s.id,{ log:(e.target as HTMLInputElement).value }) }} />
-              </div>
+            <div className="md:col-span-1">
+              <div className="label">Durum</div>
+              <select className="input w-full" value={form.status} onChange={e=>setForm(f=>({ ...f, status:e.target.value }))}>
+                <option value="open">Yeni</option>
+                <option value="in_progress">Devam Ediyor</option>
+                <option value="paused">Dondurulmuş</option>
+                <option value="closed">Kapatılmış</option>
+                <option value="canceled">İptal</option>
+              </select>
             </div>
-
-            <div className="mt-4">
-              <div className="label mb-1">Dosya Yükle (Sürükle-Bırak)</div>
-              <Dropzone jobId={jobId} stepId={s.id} />
+            <div className="md:col-span-3">
+              <div className="label">Açıklama</div>
+              <textarea className="input w-full" rows={4}
+                value={form.description} onChange={e=>setForm(f=>({ ...f, description:e.target.value }))}/>
             </div>
-
-            <div className="mt-4">
-              <Comments jobId={jobId} stepId={s.id} />
+            <div className="md:col-span-3 flex justify-end">
+              <button className="btn" onClick={save}>Kaydet</button>
             </div>
           </div>
-        ))}
+        )}
       </div>
+
+      {canEdit && !edit && (
+        <div className="card p-4 flex flex-wrap gap-2">
+          <button className="btn" onClick={()=>setStatus('in_progress')}>Devam Ettir</button>
+          <button className="btn" onClick={()=>setStatus('paused')}>Dondur</button>
+          <button className="btn" onClick={()=>setStatus('closed')}>Kapat</button>
+          <button className="btn" onClick={()=>setStatus('canceled')}>İptal Et</button>
+        </div>
+      )}
     </div>
-  );
+  )
 }
