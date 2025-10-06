@@ -1,11 +1,29 @@
 // lib/supabaseAdmin.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
+let _supabaseAdmin: SupabaseClient | null = null;
 
-export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY, // server only
-  { auth: { persistSession: false }, global: { headers: { 'X-Client-Info': 'admin-route' } } }
-);
+export const getSupabaseAdmin = () => {
+  if (_supabaseAdmin) return _supabaseAdmin;
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !supabaseServiceKey) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+  }
+
+  _supabaseAdmin = createClient(
+    supabaseUrl,
+    supabaseServiceKey,
+    { auth: { persistSession: false }, global: { headers: { 'X-Client-Info': 'admin-route' } } }
+  );
+
+  return _supabaseAdmin;
+};
+
+export const supabaseAdmin = new Proxy({} as SupabaseClient, {
+  get(_target, prop) {
+    return getSupabaseAdmin()[prop as keyof SupabaseClient];
+  }
+});

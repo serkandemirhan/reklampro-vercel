@@ -5,7 +5,14 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
-  // Supabase auth çerezlerini burada senkronize ediyoruz
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    return res
+  }
+
   const supabase = createMiddlewareClient({ req, res })
   await supabase.auth.getSession()
   return res
