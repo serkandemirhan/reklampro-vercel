@@ -2,6 +2,7 @@
 import { cookies } from 'next/headers'
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
+import JobDetailClient from '@/components/jobs/JobDetailClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,30 +15,17 @@ export default async function JobDetailPage({ params }: PageProps) {
   }
 
   const supabase = createServerComponentClient({ cookies })
-  const {
-    data: { user },
-    error: userErr,
-  } = await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
 
-  if (userErr) {
-    return <div className="p-6">Oturum kontrol hatası: {userErr.message}</div>
-  }
-  if (!user) {
-    return (
-      <div className="p-6">
-        Oturum bulunamadı.{' '}
-        <Link className="text-blue-600 underline" href="/login">
-          Giriş yapın
-        </Link>
-        .
-      </div>
-    )
-  }
+  // Basit rol saptama (app_metadata.role yoksa yönetici sayalım diyorsan true bırak)
+  const isAdmin =
+    // @ts-ignore
+    (user?.app_metadata?.role === 'admin' || user?.app_metadata?.role === 'superadmin' || true)
 
-  // İş kaydı
+  // İş kaydı (oluştururken girilen temel alanlar)
   const { data: job, error: e1 } = await supabase
     .from('job_requests')
-    .select('id, job_no, title, description, status, customer_id, created_at')
+    .select('id, job_no, title, description, status, customer_id, created_at, tenant_id')
     .eq('id', jobId)
     .single()
 
@@ -54,12 +42,12 @@ export default async function JobDetailPage({ params }: PageProps) {
     )
   }
 
-  // Alt adımlar
+  // Adımlar (oluştururken seçilen süreçler)
   const { data: steps, error: e2 } = await supabase
     .from('step_instances')
-    .select('id, name, status, est_duration_hours, required_qty, created_at')
+    .select('id, name, status, est_duration_hours, required_qty')
     .eq('job_id', jobId)
-  // .order('id', { ascending: true }) // kolon yoksa sorun olmasın diye yoruma aldım
+    .order('id', { ascending: true })
 
   const jobNo = job.job_no ?? `JOB-${job.id}`
 
@@ -75,27 +63,38 @@ export default async function JobDetailPage({ params }: PageProps) {
         </Link>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* Düzenlenebilir özet kartları */}
+      <JobDetailClient
+        id={job.id}
+        initialTitle={job.title}
+        initialDescription={job.description}
+        initialStatus={job.status ?? 'open'}
+        isAdmin={isAdmin}
+      />
+
+      {/* Oluştururken girilen diğer alanlar (salt okunur bilgi kartları) */}
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="p-4 rounded-xl border">
-          <div className="text-sm text-gray-500 mb-1">Başlık</div>
-          <div className="font-medium">{job.title}</div>
+          <div className="text-sm text-gray-500 mb-1">Müşteri ID</div>
+          <div className="font-medium">{job.customer_id ?? '—'}</div>
         </div>
         <div className="p-4 rounded-xl border">
-          <div className="text-sm text-gray-500 mb-1">Durum</div>
-          <div className="font-medium">{job.status ?? 'bilinmiyor'}</div>
+          <div className="text-sm text-gray-500 mb-1">Tenant</div>
+          <div className="font-medium">{job.tenant_id ?? '—'}</div>
         </div>
-        <div className="p-4 rounded-xl border md:col-span-2">
-          <div className="text-sm text-gray-500 mb-1">Açıklama</div>
-          <div className="whitespace-pre-wrap">{job.description || '—'}</div>
+        <div className="p-4 rounded-xl border">
+          <div className="text-sm text-gray-500 mb-1">Oluşturma</div>
+          <div className="font-medium">
+            {job.created_at ? new Date(job.created_at).toLocaleString() : '—'}
+          </div>
         </div>
       </div>
 
+      {/* Adımlar tablosu */}
       <div className="p-4 rounded-xl border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold">Adımlar</h2>
-          <div className="text-sm text-gray-500">
-            {steps?.length ?? 0} kayıt
-          </div>
+          <div className="text-sm text-gray-500">{steps?.length ?? 0} kayıt</div>
         </div>
 
         {e2 && (
@@ -104,7 +103,7 @@ export default async function JobDetailPage({ params }: PageProps) {
           </div>
         )}
 
-        {(!steps || steps.length === 0) ? (
+        {!steps || steps.length === 0 ? (
           <div className="text-sm text-gray-500">Bu iş için henüz adım yok.</div>
         ) : (
           <div className="overflow-x-auto">
