@@ -1,75 +1,83 @@
-// app/api/jobs/[id]/route.ts
+// app/api/jobs/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { supa } from '../../_utils/supabase'   // ✅ düzeltildi
+import { supa } from '../_utils/supabase'
 
-export async function GET(req: NextRequest, context: { params: { id: string } }) {
+// GET /api/jobs  -> (opsiyonel) liste
+export async function GET(req: NextRequest) {
   try {
-    const id = Number(context.params.id)
-    if (Number.isNaN(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-
     const sb = supa()
-    const { data: { user } } = await sb.auth.getUser()
+    const {
+      data: { user },
+    } = await sb.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const { data: job, error: e1 } = await sb
+    const url = new URL(req.url)
+    const limit = Number(url.searchParams.get('limit') || 100)
+
+    const { data, error } = await sb
       .from('job_requests')
       .select('id, job_no, title, description, status, customer_id, created_at')
-      .eq('id', id)
-      .single()
+      .order('id', { ascending: false })
+      .limit(limit)
 
-    if (e1) return NextResponse.json({ error: e1.message }, { status: 404 })
-
-    const { data: steps, error: e2 } = await sb
-      .from('step_instances')
-      .select('id, name, status, est_duration_hours, required_qty, created_at')
-      .eq('job_id', id)
-      .order('id', { ascending: true })
-
-    if (e2) return NextResponse.json({ error: e2.message }, { status: 400 })
-
-    return NextResponse.json({ ...job, steps: steps ?? [] })
+    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    return NextResponse.json(data)
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Unexpected error' }, { status: 500 })
   }
 }
 
-export async function PATCH(req: NextRequest, context: { params: { id: string } }) {
+// POST /api/jobs  -> oluşturma
+export async function POST(req: NextRequest) {
   try {
-    const id = Number(context.params.id)
-    if (Number.isNaN(id)) return NextResponse.json({ error: 'Invalid id' }, { status: 400 })
-
+    const body = await req.json()
     const sb = supa()
-    const { data: { user } } = await sb.auth.getUser()
+    const {
+      data: { user },
+    } = await sb.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-    const body = await req.json()
-    const updatePayload: any = {}
-    ;['title', 'description', 'status', 'customer_id'].forEach((k) => {
-      if (body[k] !== undefined) updatePayload[k] = body[k]
-    })
+    const tenantId =
+      // @ts-ignore
+      user?.app_metadata?.tenant_id ?? body?.tenant_id ?? 1
 
-    if (Object.keys(updatePayload).length === 0)
-      return NextResponse.json({ error: 'No fields to update' }, { status: 400 })
+    // İş talebi payload
+    const jobPayload: any = {
+      tenant_id: tenantId,
+      customer_id: body.customer_id ?? null,
+      title: String(body.title || body.customer_name || 'İş Talebi'),
+      description: String(body.description || ''),
+      status: body.status ?? 'in_progress',
+    }
 
-    const { data: job, error: e1 } = await sb
-      .from('job_requests')
-      .update(updatePayload)
-      .eq('id', id)
-      .select('*')
-      .single()
+    // Insert job
+    const {
+      data: job,
+      error: e1,
+    } = await sb.from('job_requests').insert(jobPayload).select('*').single()
 
     if (e1) return NextResponse.json({ error: e1.message }, { status: 400 })
 
-    // Alt görevleri de güncelle
-    if (body.status === 'frozen' || body.status === 'canceled') {
-      const { error: e2 } = await sb
-        .from('step_instances')
-        .update({ status: body.status })
-        .eq('job_id', id)
+    // Seçilen süreç/adımlar (opsiyonel)
+    const steps = Array.isArray(body.steps) ? body.steps : []
+    if (steps.length > 0) {
+      const rows = steps.map((s: any) => ({
+        tenant_id: tenantId,
+        job_id: job.id,
+        template_id: s.template_id ?? null,
+        name: String(s.name || s.title || 'Adım'),
+        est_duration_hours: s.est_duration_hours ?? s.estimated_hours ?? null,
+        required_qty: s.required_qty ?? s.required ?? null,
+        status: 'pending',
+      }))
+      const { error: e2 } = await sb.from('step_instances').insert(rows)
       if (e2) return NextResponse.json({ error: e2.message }, { status: 400 })
     }
 
-    return NextResponse.json(job)
+    // ⬇️ Hata veren satır burada düzeltiliyor (tek satır!)
+    const job_no = job.job_no ?? `JOB-${job.id}`
+
+    return NextResponse.json({ id: job.id, job_no }, { status: 200 })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message ?? 'Unexpected error' }, { status: 500 })
   }
