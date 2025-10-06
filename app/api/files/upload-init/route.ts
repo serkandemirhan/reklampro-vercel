@@ -18,19 +18,25 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const tenantId = user.app_metadata?.tenant_id ?? 1
+
+  const tenantId = user?.app_metadata?.tenant_id ?? 1
+  
+  // BURASI DEĞİŞTİ: "tenants/..." yerine "Tenant{tenantId}/..."
+  const tenantFolder = `Tenant${tenantId}`
+  
+  const parts = [tenantFolder, customer]
+  if (body.subfolder) parts.push(String(body.subfolder).trim().replaceAll('/', '-'))
+  
+  const key = `${parts.join('/')}/${crypto.randomUUID()}_${body.filename}`
+  // ...
+
+
   const customer = (body.customer_name || 'GENEL')
     .trim()
     .replaceAll('/', '-')
     .replaceAll('\\', '-')
 
-  const parts = [
-    'tenants',
-    String(tenantId),
-    customer,
-  ]
-  if (body.subfolder) parts.push(String(body.subfolder).trim().replaceAll('/', '-'))
-  const key = `${parts.join('/')}/${crypto.randomUUID()}_${body.filename}`
+
 
   // REKLAMPRO bucket'ında signed upload URL üret
   const { data, error } = await sb.storage.from('REKLAMPRO').createSignedUploadUrl(key)
