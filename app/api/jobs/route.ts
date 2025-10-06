@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supa } from '../../_utils/supabase'
+import { supa } from '../_utils/supabase'
 
 function isAdmin(role: any) {
   const r = String(role || '').toLowerCase()
