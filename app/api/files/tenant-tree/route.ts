@@ -17,8 +17,12 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const tenantId = user.app_metadata?.tenant_id ?? 1
+
   const bucket = 'REKLAMPRO'
-  const root = `tenants/${tenantId}`
+  // BURASI DEĞİŞTİ:
+  const root = `Tenant${tenantId}`
+
+
 
   // Supabase storage.list recursive değil; biz gezeceğiz.
   const queue: string[] = [root]
