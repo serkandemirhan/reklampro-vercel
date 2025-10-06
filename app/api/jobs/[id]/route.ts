@@ -1,6 +1,6 @@
 // app/api/jobs/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { supa } from '../_utils/supabase'
+import { supa } from '../../_utils/supabase'
 
 // GET /api/jobs  -> (opsiyonel) liste
 export async function GET(req: NextRequest) {
