@@ -46,10 +46,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     .eq('id', Number(params.id))
     .select()
     .single()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Opsiyonel audit
-  await sb.from('audit_logs').insert({
+  // Opsiyonel audit – Hata oluşursa önemsemiyoruz (await ile al, hata değişkeninde kalsın)
+  const { error: _auditErr } = await sb.from('audit_logs').insert({
     tenant_id: user.app_metadata?.tenant_id ?? 1,
     user_id: user.id,
     model: 'step_instances',
@@ -58,7 +59,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     field: 'status',
     old_value: null,
     new_value: body.status ?? null
-  }).catch(() => {})
+  })
+  // _auditErr varsa bile ignore ediyoruz
 
   return NextResponse.json(data)
 }
