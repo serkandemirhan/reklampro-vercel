@@ -1,11 +1,14 @@
 // app/api/jobs/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { supa } from '../_utils/supabase'   // ✅ düzeltildi
+import { supa } from '../_utils/supabase'
 
+// GET /api/jobs  -> (opsiyonel) liste
 export async function GET(req: NextRequest) {
   try {
     const sb = supa()
-    const { data: { user } } = await sb.auth.getUser()
+    const {
+      data: { user },
+    } = await sb.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const url = new URL(req.url)
@@ -24,17 +27,21 @@ export async function GET(req: NextRequest) {
   }
 }
 
+// POST /api/jobs  -> oluşturma
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const sb = supa()
-    const { data: { user } } = await sb.auth.getUser()
+    const {
+      data: { user },
+    } = await sb.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const tenantId =
       // @ts-ignore
       user?.app_metadata?.tenant_id ?? body?.tenant_id ?? 1
 
+    // İş talebi payload
     const jobPayload: any = {
       tenant_id: tenantId,
       customer_id: body.customer_id ?? null,
@@ -43,14 +50,15 @@ export async function POST(req: NextRequest) {
       status: body.status ?? 'in_progress',
     }
 
-    const { data: job, error: e1 } = await sb
-      .from('job_requests')
-      .insert(jobPayload)
-      .select('*')
-      .single()
+    // Insert job
+    const {
+      data: job,
+      error: e1,
+    } = await sb.from('job_requests').insert(jobPayload).select('*').single()
 
     if (e1) return NextResponse.json({ error: e1.message }, { status: 400 })
 
+    // Seçilen süreç/adımlar (opsiyonel)
     const steps = Array.isArray(body.steps) ? body.steps : []
     if (steps.length > 0) {
       const rows = steps.map((s: any) => ({
@@ -66,4 +74,11 @@ export async function POST(req: NextRequest) {
       if (e2) return NextResponse.json({ error: e2.message }, { status: 400 })
     }
 
-    const job_no = job.job_no ??
+    // ⬇️ Hata veren satır burada düzeltiliyor (tek satır!)
+    const job_no = job.job_no ?? `JOB-${job.id}`
+
+    return NextResponse.json({ id: job.id, job_no }, { status: 200 })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message ?? 'Unexpected error' }, { status: 500 })
+  }
+}
