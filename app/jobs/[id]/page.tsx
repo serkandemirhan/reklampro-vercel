@@ -1,146 +1,138 @@
-'use client'
-import { useEffect, useState } from 'react'
+// app/jobs/[id]/page.tsx
+import { cookies } from 'next/headers'
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import Link from 'next/link'
 
-type Job = {
-  id:number; job_no:string; title:string; description:string|null;
-  status:'open'|'in_progress'|'paused'|'closed'|'canceled'|string;
-  customer_id:number|null; created_at:string; customer_name?:string|null
-}
+export const dynamic = 'force-dynamic'
 
-type SessionUser = { id:string, role?:string }
+type PageProps = { params: { id: string } }
 
-export default function JobDetail({ params }: { params:{ id:string }}) {
-  const id = Number(params.id)
-  const [job, setJob] = useState<Job|null>(null)
-  const [user, setUser] = useState<SessionUser|null>(null)
-  const [edit, setEdit] = useState(false)
-  const [form, setForm] = useState({ title:'', description:'', status:'open' })
-
-  const load = async () => {
-    // job
-    const res = await fetch(`/api/jobs/${id}`)
-    if (res.ok) {
-      const j: Job = await res.json()
-      setJob(j)
-      setForm({
-        title: j.title ?? '',
-        description: j.description ?? '',
-        status: j.status as any
-      })
-    }
-    // me
-    const me = await fetch('/api/me').catch(()=>null) // varsa
-    if (me?.ok) {
-      const data = await me.json()
-      setUser({ id: data.id, role: data.app_metadata?.role })
-    }
+export default async function JobDetailPage({ params }: PageProps) {
+  const jobId = Number(params.id)
+  if (Number.isNaN(jobId)) {
+    return <div className="p-6">Geçersiz iş ID: {params.id}</div>
   }
 
-  useEffect(()=>{ load() }, [])
+  const supabase = createServerComponentClient({ cookies })
+  const {
+    data: { user },
+    error: userErr,
+  } = await supabase.auth.getUser()
 
-  const canEdit = ['admin','manager'].includes(String(user?.role))
-
-  const save = async () => {
-    const res = await fetch(`/api/jobs/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify(form)
-    })
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({}))
-      alert(e.error || 'Kaydetme başarısız')
-      return
-    }
-    setEdit(false)
-    await load()
+  if (userErr) {
+    return <div className="p-6">Oturum kontrol hatası: {userErr.message}</div>
+  }
+  if (!user) {
+    return (
+      <div className="p-6">
+        Oturum bulunamadı.{' '}
+        <Link className="text-blue-600 underline" href="/login">
+          Giriş yapın
+        </Link>
+        .
+      </div>
+    )
   }
 
-  const setStatus = async (status:'paused'|'canceled'|'in_progress'|'closed') => {
-    const res = await fetch(`/api/jobs/${id}`, {
-      method:'PATCH',
-      headers:{ 'Content-Type':'application/json' },
-      body: JSON.stringify({ status })
-    })
-    if (!res.ok) {
-      const e = await res.json().catch(()=>({}))
-      alert(e.error || 'Durum değiştirilemedi')
-      return
-    }
-    await load()
+  // İş kaydı
+  const { data: job, error: e1 } = await supabase
+    .from('job_requests')
+    .select('id, job_no, title, description, status, customer_id, created_at')
+    .eq('id', jobId)
+    .single()
+
+  if (e1 || !job) {
+    return (
+      <div className="p-6">
+        İş bulunamadı veya erişim yok. {e1?.message && <span>({e1.message})</span>}
+        <div className="mt-4">
+          <Link href="/jobs" className="text-blue-600 underline">
+            İş listesine dön
+          </Link>
+        </div>
+      </div>
+    )
   }
 
-  if (!job) return <div className="p-4">Yükleniyor...</div>
+  // Alt adımlar
+  const { data: steps, error: e2 } = await supabase
+    .from('step_instances')
+    .select('id, name, status, est_duration_hours, required_qty, created_at')
+    .eq('job_id', jobId)
+  // .order('id', { ascending: true }) // kolon yoksa sorun olmasın diye yoruma aldım
+
+  const jobNo = job.job_no ?? `JOB-${job.id}`
 
   return (
-    <div className="space-y-4">
+    <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">İş Talebi #{job.job_no}</h2>
-        <div className="flex gap-2">
-          <Link className="btn" href="/jobs">Tüm Talepler</Link>
-          {canEdit && (
-            <button className="btn" onClick={()=>setEdit(e=>!e)}>{edit ? 'Vazgeç' : 'Düzenle'}</button>
-          )}
+        <div>
+          <h1 className="text-2xl font-semibold">İş Detayı</h1>
+          <p className="text-sm text-gray-500">#{jobNo}</p>
+        </div>
+        <Link href="/jobs" className="px-3 py-2 rounded bg-gray-100 hover:bg-gray-200">
+          ← Listeye Dön
+        </Link>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="p-4 rounded-xl border">
+          <div className="text-sm text-gray-500 mb-1">Başlık</div>
+          <div className="font-medium">{job.title}</div>
+        </div>
+        <div className="p-4 rounded-xl border">
+          <div className="text-sm text-gray-500 mb-1">Durum</div>
+          <div className="font-medium">{job.status ?? 'bilinmiyor'}</div>
+        </div>
+        <div className="p-4 rounded-xl border md:col-span-2">
+          <div className="text-sm text-gray-500 mb-1">Açıklama</div>
+          <div className="whitespace-pre-wrap">{job.description || '—'}</div>
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-3">
-        <div className="card p-4">
-          <div className="text-xs text-gray-500">Müşteri</div>
-          <div className="font-medium">{job.customer_name ?? '-'}</div>
+      <div className="p-4 rounded-xl border">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-semibold">Adımlar</h2>
+          <div className="text-sm text-gray-500">
+            {steps?.length ?? 0} kayıt
+          </div>
         </div>
-        <div className="card p-4">
-          <div className="text-xs text-gray-500">Durum</div>
-          <div className="font-medium">{job.status}</div>
-        </div>
-        <div className="card p-4">
-          <div className="text-xs text-gray-500">Oluşturulma</div>
-          <div>{new Date(job.created_at).toLocaleString('tr-TR')}</div>
-        </div>
-      </div>
 
-      <div className="card p-4">
-        {!edit ? (
-          <>
-            <div className="mb-2"><span className="text-xs text-gray-500">Başlık</span><div className="font-medium">{job.title}</div></div>
-            <div><span className="text-xs text-gray-500">Açıklama</span><div>{job.description ?? '-'}</div></div>
-          </>
+        {e2 && (
+          <div className="text-red-600 text-sm mb-2">
+            Adımlar yüklenemedi: {e2.message}
+          </div>
+        )}
+
+        {(!steps || steps.length === 0) ? (
+          <div className="text-sm text-gray-500">Bu iş için henüz adım yok.</div>
         ) : (
-          <div className="grid md:grid-cols-3 gap-3">
-            <div className="md:col-span-1">
-              <div className="label">Başlık</div>
-              <input className="input w-full" value={form.title} onChange={e=>setForm(f=>({ ...f, title:e.target.value }))}/>
-            </div>
-            <div className="md:col-span-1">
-              <div className="label">Durum</div>
-              <select className="input w-full" value={form.status} onChange={e=>setForm(f=>({ ...f, status:e.target.value }))}>
-                <option value="open">Yeni</option>
-                <option value="in_progress">Devam Ediyor</option>
-                <option value="paused">Dondurulmuş</option>
-                <option value="closed">Kapatılmış</option>
-                <option value="canceled">İptal</option>
-              </select>
-            </div>
-            <div className="md:col-span-3">
-              <div className="label">Açıklama</div>
-              <textarea className="input w-full" rows={4}
-                value={form.description} onChange={e=>setForm(f=>({ ...f, description:e.target.value }))}/>
-            </div>
-            <div className="md:col-span-3 flex justify-end">
-              <button className="btn" onClick={save}>Kaydet</button>
-            </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-4">#</th>
+                  <th className="py-2 pr-4">Ad</th>
+                  <th className="py-2 pr-4">Durum</th>
+                  <th className="py-2 pr-4">Tah. Süre (saat)</th>
+                  <th className="py-2 pr-4">Gereksinim</th>
+                </tr>
+              </thead>
+              <tbody>
+                {steps.map((s, idx) => (
+                  <tr key={s.id} className="border-b last:border-0">
+                    <td className="py-2 pr-4">{idx + 1}</td>
+                    <td className="py-2 pr-4">{s.name}</td>
+                    <td className="py-2 pr-4">{s.status ?? '—'}</td>
+                    <td className="py-2 pr-4">{s.est_duration_hours ?? '—'}</td>
+                    <td className="py-2 pr-4">{s.required_qty ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
-
-      {canEdit && !edit && (
-        <div className="card p-4 flex flex-wrap gap-2">
-          <button className="btn" onClick={()=>setStatus('in_progress')}>Devam Ettir</button>
-          <button className="btn" onClick={()=>setStatus('paused')}>Dondur</button>
-          <button className="btn" onClick={()=>setStatus('closed')}>Kapat</button>
-          <button className="btn" onClick={()=>setStatus('canceled')}>İptal Et</button>
-        </div>
-      )}
     </div>
   )
 }
