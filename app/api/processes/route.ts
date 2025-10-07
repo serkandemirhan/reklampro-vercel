@@ -20,7 +20,15 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const tenantId = user.app_metadata?.tenant_id ?? 1
-  const payload = { tenant_id: tenantId, name: body.name, default_role: body.default_role, order_index: body.order_index ?? 0 }
+  const payload = {
+    tenant_id: tenantId,
+    name: body.name,
+    default_role: body.default_role,
+    order_index: body.order_index ?? 0,
+    is_parallel: !!body.is_parallel,
+    is_machine_based: !!body.is_machine_based,
+    is_production: !!body.is_production,
+  }
   const { data, error } = await sb.from('process_templates').insert(payload).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json(data)

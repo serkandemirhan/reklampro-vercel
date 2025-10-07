@@ -6,11 +6,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const body = await req.json() // { name?, default_role?, order_index? }
+  const body = await req.json()
   const updates: any = {}
   if (typeof body.name === 'string') updates.name = body.name
   if (typeof body.default_role === 'string') updates.default_role = body.default_role
   if (typeof body.order_index === 'number') updates.order_index = body.order_index
+  if (body.is_parallel !== undefined) updates.is_parallel = !!body.is_parallel
+  if (body.is_machine_based !== undefined) updates.is_machine_based = !!body.is_machine_based
+  if (body.is_production !== undefined) updates.is_production = !!body.is_production
 
   const { data, error } = await sb
     .from('process_templates')
