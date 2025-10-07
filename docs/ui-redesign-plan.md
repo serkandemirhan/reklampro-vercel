@@ -120,8 +120,8 @@ Bu belge, kullanıcıdan gelen yeni ekran örneklerine uyum sağlamak için mevc
 
 ## 8. Teknik Yol Haritası
 
-1. **Hafta 1**  
-   - Veri tabanı şema güncellemeleri ve API uç noktalarının hazırlanması.  
+1. **Hafta 1**
+   - Veri tabanı şema güncellemeleri ve API uç noktalarının hazırlanması.
    - Süreç & Makine yönetimi arayüzlerinin temel hali.
 
 2. **Hafta 2**  
@@ -140,8 +140,116 @@ Bu belge, kullanıcıdan gelen yeni ekran örneklerine uyum sağlamak için mevc
 
 - Supabase tablo değişiklikleri mevcut veriyi etkileyebilir; migration öncesi yedek alın.  
 - Çoklu checkbox/izin yapılarında UI karmaşıklığı artar; performans için `virtualized table` düşünülmeli.  
-- Dosya yükleme kotaları ve güvenlik (rol bazlı erişim) gözden geçirilmeli.  
+- Dosya yükleme kotaları ve güvenlik (rol bazlı erişim) gözden geçirilmeli.
 - PDF çıktı ihtiyaçları için `@react-pdf/renderer` veya sunucu taraflı çözüm değerlendirilmeli.
+
+## 10. İş Paketleri ve Alt Görev Listesi
+
+Aşağıdaki iş paketleri, yukarıdaki mimari planın uygulanabilir adımlara dönüştürülmüş halidir. Her paket sprint planlamasında bağımsız hikâye (story) olarak ele alınabilir. Alt maddeler, geliştirme veya QA sırasında tamamlanması gereken görevlerdir.
+
+### EPIC A — Veri Tabanı & API Altyapısı
+
+1. **Migration Hazırlığı**
+   - [ ] Supabase şemasına `machines`, `roles`, `role_permissions`, `user_roles`, `customer_branches`, `customer_files`, `customer_tags` tablolarını ekle.
+   - [ ] Mevcut `process_templates` ve `step_instances` tablolarına gerekli yeni alanları (`is_parallel`, `is_machine_based`, `is_production`, `production_note`, `machine_id`, `start_at`, `end_at`) ekle.
+   - [ ] Migration dosyaları için rollback senaryolarını yaz ve QA ortamında çalıştır.
+
+2. **API Katmanı Güncellemeleri**
+   - [ ] `/api/processes`, `/api/machines`, `/api/roles`, `/api/users`, `/api/customers` uç noktalarını yeni alanlarla uyumlu hale getir.
+   - [ ] Step durum güncellemeleri için `/api/steps/:id` PATCH uç noktasını oluştur.
+   - [ ] Dosya yükleme işlemlerini `customer_files` ve `job_files` tabloları ile ilişkilendir.
+
+3. **Yetkilendirme Kontrolleri**
+   - [ ] API katmanında rol bazlı erişim doğrulamasını merkezi middleware'e taşı.
+   - [ ] Admin kullanıcılar için genişletilmiş izin setini doğrula.
+
+### EPIC B — Yönetim Paneli Tabloları
+
+1. **Süreç Yönetimi**
+   - [ ] `components/admin/processes/ProcessTable.tsx` bileşenini oluştur.
+   - [ ] Sıra sürükle-bırak desteğini ekle (opsiyonel backlog: ayrı story).
+   - [ ] Yeni süreç ekleme satırı ve güncelle/sil diyaloglarını bağla.
+
+2. **Makine Yönetimi**
+   - [ ] `components/admin/machines/MachineTable.tsx` bileşeni ile süreç dropdown'ını entegre et.
+   - [ ] Makine durumu rozetlerini (`Aktif`, `Bakımda`, `Pasif`) renklendir.
+   - [ ] Makine ekleme/güncelleme modallarını API ile bağla.
+
+3. **Rol Yönetimi**
+   - [ ] Dinamik kolonlu izin matrisi bileşenini oluştur.
+   - [ ] `role_permissions` tablosundan gelen veriyi checkbox üçlemesi ile eşle.
+   - [ ] Yeni süreç eklendiğinde UI'da kolonların otomatik güncellendiğini test et.
+
+4. **Kullanıcı Yönetimi**
+   - [ ] Kullanıcı listesi tablosunu Supabase profilleri ile doldur.
+   - [ ] Çoklu rol atama bileşenini (`Combobox`) entegre et.
+   - [ ] Kullanıcı güncelleme modal'ında temel iletişim alanlarını düzenlenebilir yap.
+
+### EPIC C — İş Talebi Oluşturma ve Yönetici Akışı
+
+1. **Yeni İş Talebi Formu**
+   - [ ] Form bölümlerini (Genel Bilgiler, Süreç Satırları, Dosya & Notlar) kartlar halinde düzenle.
+   - [ ] Müşteri seçimi dropdown'ını arama destekli hale getir ve "Yeni Müşteri" modal'ına bağla.
+   - [ ] Taslak kaydetme işlevini `status='draft'` mantığı ile doğrula.
+
+2. **Süreç Satırı Yönetimi**
+   - [ ] Süreç listesi için `process_templates` verisini hydrate et.
+   - [ ] Satır bazlı sorumlu rol seçimleri ve boolean alanları react-hook-form ile yönet.
+   - [ ] Yeni satır ekle/sil işlemleri için geçici state + API entegrasyonunu tamamla.
+
+3. **Yönetici Süreç Akışı**
+   - [ ] `JobTimeline` bileşenini oluştur ve durum renklerini tanımla.
+   - [ ] Süreç detay kartlarını `step_instances` verisi ile doldur.
+   - [ ] "Makine Durumunu Gör" gibi buton eylemlerini modal/panel bileşenlerine bağla.
+
+### EPIC D — Operatör Görev Ekranı
+
+1. **Görev Listesi**
+   - [ ] Operatöre özel filtrelenmiş görev tablosunu oluştur.
+   - [ ] Durum makinesi (`pending`, `in_progress`, `completed`, `paused`) geçişlerini buton aksiyonlarına bağla.
+   - [ ] Görev kartı üzerinde makine ve müşteri bilgilerini göster.
+
+2. **Görev Detay Formu**
+   - [ ] Üretim notu, açıklama, miktar ve dosya yükleme alanlarını ekle.
+   - [ ] "Başlat", "Durdur", "Tamamlandı" butonlarını API çağrılarına bağla.
+   - [ ] Dosya yüklemeleri için yükleme durum geri bildirimi ekle.
+
+3. **Makine Durumu Paneli**
+   - [ ] Makinelerin mevcut durumunu ve aktif görevlerini gösteren tabloyu oluştur.
+   - [ ] Operatörün yetkili olmadığı makineleri filtreleyen sorguyu uygula.
+   - [ ] Makine durum değişikliklerinin real-time (Supabase Realtime) ile güncellenmesini backlog'a ekle.
+
+### EPIC E — Müşteri Yönetimi
+
+1. **Yeni Müşteri Formu**
+   - [ ] Form bileşenlerini tek sayfalık layoutta grupla.
+   - [ ] Şube ekleme tablosunu inline düzenlemeli hale getir.
+   - [ ] Kaydetme sonrası müşteri numarası oluşturma trigger'ını test et.
+
+2. **Dosya ve Etiket Yönetimi**
+   - [ ] Logo ve doküman yükleme bileşenlerini `customer_files` tablosu ile bağla.
+   - [ ] Etiket seçim bileşenini (`TagMultiSelect`) oluştur.
+   - [ ] Müşteri listesinde logo thumbnail'ını göster.
+
+3. **Pasifleştirme Akışı**
+   - [ ] "Sil/Pasifleştir" işlemini soft delete (`is_active` veya `deleted_at`) ile uygulamaya al.
+   - [ ] Pasif müşteriler için filtreleme/sort seçeneklerini ekle.
+
+### EPIC F — Test, Dokümantasyon ve Yayın Hazırlığı
+
+1. **Test Senaryoları**
+   - [ ] Cypress veya Playwright ile kritik kullanıcı akışları için E2E testleri yaz.
+   - [ ] API için unit/integration testlerini güncelle.
+   - [ ] Rol bazlı yetkilendirme için smoke testleri planla.
+
+2. **Dokümantasyon**
+   - [ ] README içinde yeni modüller ve kurulumu açıklayan bölüm ekle.
+   - [ ] Operasyon ekibi için kısa kullanım kılavuzu hazırlat.
+
+3. **Canlıya Alma Kontrolleri**
+   - [ ] Migration'ları staging ortamında dener ve rollback senaryosunu doğrula.
+   - [ ] Performans ve güvenlik gözden geçirmesini tamamla.
+   - [ ] Yayın sonrası izleme (monitoring) metriklerini güncelle.
 
 ---
 
